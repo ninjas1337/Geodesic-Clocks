@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Geodesic Clocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0}
+  :root{
+    --ground:#0a0e13; --panel:#111821; --line:#1f2a36; --ink:#dfe6ee; --muted:#8595a6;
+    --light:#ffcf5a; --fast:#5cc6ee; --slow:#ee8fb6; --mass:#3a4654; --focus:#ffcf5a;
+    color-scheme:dark;
+  }
+  html,body{background:var(--ground);color:var(--ink)}
+  body{font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;padding-inline:16px;padding-block:18px 40px}
+  .wrap{max-width:1240px;margin:0 auto;display:grid;gap:16px}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+  h1{font:italic 500 30px/1.1 "Newsreader",Georgia,serif;margin:0;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:14px;max-width:70ch}
+  .stage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}
+  @media (max-width:860px){.stage{grid-template-columns:1fr}}
+  .view{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#070a0e;height:min(68vh,640px);min-height:360px}
+  canvas#gl{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+  .legend{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:3px;font:12px/1.3 "IBM Plex Mono",ui-monospace,monospace;color:var(--muted);pointer-events:none;background:rgba(7,10,14,.72);padding:8px 10px;border-radius:4px}
+  .legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:7px;border-radius:2px}
+  .ramp{height:6px;width:130px;border-radius:3px;background:linear-gradient(90deg,#3d5068,#7a6a8e,#d98a4e,#ffcf5a);margin-top:4px}
+  .viewbtns{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+  aside{display:grid;gap:14px;align-content:start;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+  .ctl{display:grid;gap:4px}
+  .ctl label{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .ctl label b{font:500 13px "IBM Plex Mono",monospace;color:var(--ink)}
+  input[type=range]{width:100%;accent-color:var(--light)}
+  .row{display:flex;flex-wrap:wrap;gap:8px}
+  button{font:500 13px "IBM Plex Sans",sans-serif;color:var(--ink);background:#1a2430;border:1px solid #2a3847;border-radius:4px;padding:6px 11px;cursor:pointer}
+  button:hover{background:#223040}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  h2{font:600 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+  .clocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+  .clock{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px}
+  .clock h3{margin:0 0 4px;font:600 14px "IBM Plex Sans",sans-serif}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:1px 10px;font:12.5px/1.45 "IBM Plex Mono",monospace;color:var(--muted)}
+  .kv span:nth-child(even){color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+  .tcoord{font:500 13px "IBM Plex Mono",monospace;color:var(--muted)}
+  .tcoord b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px 28px;color:#c3ccd6;font-size:14px}
+  .notes p{margin:0 0 8px;max-width:68ch}
+  .eq{font:13px/1.6 "IBM Plex Mono",monospace;color:var(--ink);background:#0d131a;border:1px solid var(--line);border-radius:4px;padding:8px 10px;overflow-x:auto;white-space:pre}
+  .src{font-size:12.5px;color:var(--muted)}
+  .src li{margin-bottom:3px}
+  @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Geodesic Clocks</h1>
+    <div class="sub">A light ray and two clocks crossing the field of a mass in a 3D lattice. Each lattice node is a static clock that ticks at √(1+2Φ/c²). Watch the nodes near the mass fall behind in phase.</div>
+  </header>
+
+  <div class="stage">
+    <div class="view">
+      <canvas id="gl" aria-label="3D lattice with light ray and clock worldlines"></canvas>
+      <div class="legend">
+        <div><i style="background:var(--light)"></i>light, null geodesic (dτ = 0)</div>
+        <div><i style="background:var(--fast)"></i>fast clock, same impact parameter</div>
+        <div><i style="background:var(--slow)"></i>slow clock, other path</div>
+        <div><i style="background:#5b6b7c"></i>flat-space reference path</div>
+        <div style="margin-top:4px">node clock rate √(1+2Φ): 1 → slowest</div>
+        <div class="ramp"></div>
+      </div>
+      <div class="viewbtns">
+        <button id="vTop" type="button">Top</button>
+        <button id="vSide" type="button">3D</button>
+      </div>
+    </div>
+
+    <aside>
+      <div class="row">
+        <button id="launch" type="button">Relaunch</button>
+        <button id="play" type="button">Pause</button>
+      </div>
+      <div class="tcoord">distant clock t = <b id="tc">0.00</b></div>
+
+      <h2>Field</h2>
+      <div class="ctl"><label for="m">Mass GM/c² <b id="mV"></b></label><input id="m" type="range" min="0.01" max="0.25" step="0.01" value="0.08"></div>
+
+      <h2>Light and fast clock</h2>
+      <div class="ctl"><label for="b">Impact parameter b <b id="bV"></b></label><input id="b" type="range" min="1.6" max="8" step="0.1" value="3"></div>
+      <div class="ctl"><label for="vf">Fast clock speed v/c <b id="vfV"></b></label><input id="vf" type="range" min="0" max="1" step="0.005" value="0.45"></div>
+
+      <h2>Slow clock</h2>
+      <div class="ctl"><label for="b2">Impact parameter <b id="b2V"></b></label><input id="b2" type="range" min="2" max="10" step="0.1" value="6"></div>
+      <div class="ctl"><label for="vs">Speed v/c <b id="vsV"></b></label><input id="vs" type="range" min="0.15" max="0.9" step="0.01" value="0.35"></div>
+
+      <h2>View</h2>
+      <div class="ctl"><label for="spd">Simulation speed <b id="spdV"></b></label><input id="spd" type="range" min="0.25" max="4" step="0.25" value="1"></div>
+      <label class="toggle"><input id="warp" type="checkbox" checked> Warp lattice (drawn radius r(1 + 1.5Φ))</label>
+      <label class="toggle"><input id="ticks" type="checkbox" checked> Node clocks tick</label>
+      <label class="toggle"><input id="flat" type="checkbox" checked> Flat-space reference paths</label>
+
+      <h2>Presets</h2>
+      <div class="row">
+        <button type="button" data-p="null">Clock on the light path</button>
+        <button type="button" data-p="newton">Newtonian limit</button>
+        <button type="button" data-p="default">Default</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="clocks">
+    <div class="clock">
+      <svg viewBox="-32 -32 64 64" width="64" height="64" aria-hidden="true"><circle r="29" fill="none" stroke="#ffcf5a" stroke-width="2"/><g id="hL"><line y2="-22" stroke="#ffcf5a" stroke-width="2.5" stroke-linecap="round"/></g><circle r="2.5" fill="#ffcf5a"/></svg>
+      <div><h3 style="color:var(--light)">Light</h3><div class="kv">
+        <span>τ</span><span>0 (null)</span>
+        <span>α measured</span><span id="aL">–</span>
+        <span>α = 4GM/c²b</span><span id="aLt">–</span>
+        <span>Shapiro Δt</span><span id="shL">–</span>
+        <span>theory Δt</span><span id="shLt">–</span>
+      </div></div>
+    </div>
+    <div class="clock">
+      <svg viewBox="-32 -32 64 64" width="64" height="64" aria-hidden="true"><circle r="29" fill="none" stroke="#5cc6ee" stroke-width="2"/><g id="hF"><line y2="-22" stroke="#5cc6ee" stroke-width="2.5" stroke-linecap="round"/></g><circle r="2.5" fill="#5cc6ee"/></svg>
+      <div><h3 style="color:var(--fast)">Fast clock</h3><div class="kv">
+        <span>τ</span><span id="tF">–</span>
+        <span>τ / t</span><span id="rF">–</span>
+        <span>SR only √(1−v²)</span><span id="srF">–</span>
+        <span>α measured</span><span id="aF">–</span>
+        <span>α(v) theory</span><span id="aFt">–</span>
+      </div></div>
+    </div>
+    <div class="clock">
+      <svg viewBox="-32 -32 64 64" width="64" height="64" aria-hidden="true"><circle r="29" fill="none" stroke="#ee8fb6" stroke-width="2"/><g id="hS"><line y2="-22" stroke="#ee8fb6" stroke-width="2.5" stroke-linecap="round"/></g><circle r="2.5" fill="#ee8fb6"/></svg>
+      <div><h3 style="color:var(--slow)">Slow clock</h3><div class="kv">
+        <span>τ</span><span id="tS">–</span>
+        <span>τ / t</span><span id="rS">–</span>
+        <span>SR only √(1−v²)</span><span id="srS">–</span>
+        <span>α measured</span><span id="aS">–</span>
+        <span>α(v) theory</span><span id="aSt">–</span>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h2 style="margin-bottom:8px">What you're looking at</h2>
+      <p>Units: G = c = 1, with lengths in units of the body radius. The mass is far larger than any real star relative to its size, so the effects can be seen. All three objects start at the left at the same coordinate time t. That is the time on a clock far from the mass.</p>
+      <p>Push the fast clock's speed toward c. Its path merges with the light ray, and its elapsed proper time τ goes to zero. A clock can approach the null geodesic but never sit on it.</p>
+      <p>The slow clock bends mainly because of the <em>time</em> term (the clock-rate gradient you see in the lattice). Light is bent equally by time and by space, which gives the factor 4.</p>
+      <p>The "warp" is a map, not a literal picture: each point is drawn at radius r(1 + 1.5Φ). A curved 3D space cannot fit inside flat 3D space.</p>
+    </div>
+    <div>
+      <h2 style="margin-bottom:8px">Model</h2>
+      <div class="eq">ds² = −(1+2Φ)dt² + (1−2Φ)|dx|²      (weak field, γ = 1)
+a   = −∇Φ (1 + v²) + 4 v (v·∇Φ)       (geodesic, 1st order in Φ)
+dτ  = dt √[(1+2Φ) − (1−2Φ) v²]
+α(v)= (2M / b v²)(1 + v²)  →  4M/b  at v = 1
+Δt_Shapiro = 2M ln[(√(L²+b²)+L)/(√(L²+b²)−L)]</div>
+      <p class="src" style="margin-top:8px">The theory column is first order in GM/(c²b). The integrated path also picks up higher-order terms, which the linearized metric only approximates, so the measured α runs a few percent high. The gap grows with the mass slider: that is where the weak-field approximation starts to fail. The frame is finite (|x| ≤ 14), which pulls the measured value slightly the other way. Φ = −M/r outside, uniform-density interior. Integrated with RK4, dt = 0.01.</p>
+      <ul class="src">
+        <li>S. Weinberg, <em>Gravitation and Cosmology</em> (Wiley, 1972), ch. 8–9.</li>
+        <li>C. M. Will, <em>Theory and Experiment in Gravitational Physics</em>, 2nd ed. (Cambridge, 2018).</li>
+        <li>A. Accioly, S. Ragusa, <em>Class. Quantum Grav.</em> 19, 5429 (2002): α(v) for massive particles.</li>
+        <li>I. I. Shapiro, <em>Phys. Rev. Lett.</em> 13, 789 (1964).</li>
+        <li>J. B. Hartle, <em>Gravity</em> (Addison-Wesley, 2003), ch. 6–9.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const L = 14, R = 1, WARPK = 1.5, DT = 0.01;
+  const S = { m:.08, b:3, vf:0, vs:.35, b2:6, spd:1, playing:true, warp:true, ticks:true, flat:true };
+  const vFromSlider = s => 1 - 0.5*Math.pow(10, -2.7*s); // 0.5 … 0.999
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- physics ----------
+  const Phi = r => r >= R ? -S.m/r : -S.m*(3*R*R - r*r)/(2*R*R*R);
+  const dPhidr = r => r >= R ? S.m/(r*r) : S.m*r/(R*R*R);
+  function acc(x,z,vx,vz){
+    const r = Math.hypot(x,z) || 1e-9, g = dPhidr(r);
+    const gx = g*x/r, gz = g*z/r, v2 = vx*vx+vz*vz, vg = vx*gx+vz*gz;
+    return [-gx*(1+v2) + 4*vx*vg, -gz*(1+v2) + 4*vz*vg];
+  }
+  const dtau = (x,z,vx,vz) => { const p = Phi(Math.hypot(x,z)); return Math.sqrt(Math.max(0,(1+2*p)-(1-2*p)*(vx*vx+vz*vz))); };
+
+  function makeBody(kind){
+    let z0, v0;
+    if(kind==='light'){ z0 = S.b; const p = Phi(Math.hypot(L,z0)); v0 = Math.sqrt((1+2*p)/(1-2*p)); }
+    else if(kind==='fast'){ z0 = S.b; v0 = S.vf; }
+    else { z0 = -S.b2; v0 = S.vs; }
+    return { kind, v0, b: Math.abs(z0), x:-L, z:z0, vx:v0, vz:0, tau:0, t:0, done:false, hit:false, trail:[[-L,z0]] };
+  }
+  let bodies = [], t = 0, tAnim = 0;
+  function step(B){
+    if(B.done) return;
+    const f = s => { const a = acc(s[0],s[1],s[2],s[3]); return [s[2],s[3],a[0],a[1]]; };
+    const s0 = [B.x,B.z,B.vx,B.vz];
+    const k1 = f(s0), k2 = f(s0.map((v,i)=>v+DT/2*k1[i])), k3 = f(s0.map((v,i)=>v+DT/2*k2[i])), k4 = f(s0.map((v,i)=>v+DT*k3[i]));
+    const s1 = s0.map((v,i)=>v+DT/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));
+    const mid = s0.map((v,i)=>(v+s1[i])/2);
+    B.tau += B.kind==='light' ? 0 : dtau(mid[0],mid[1],mid[2],mid[3])*DT;
+    [B.x,B.z,B.vx,B.vz] = s1; B.t += DT;
+    const r = Math.hypot(B.x,B.z);
+    if(r < R){ B.done = true; B.hit = true; }
+    if(B.x > L || Math.abs(B.z) > L+4 || B.x < -L-4 || B.t > 400) B.done = true;
+    const last = B.trail[B.trail.length-1];
+    if(Math.hypot(B.x-last[0],B.z-last[1]) > 0.08 || B.done) B.trail.push([B.x,B.z]);
+  }
+  function launch(){ bodies = ['light','fast','slow'].map(makeBody); t = 0; }
+
+  // ---------- rendering ----------
+  const canvas = $('gl');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+  renderer.setClearColor(0x070a0e);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 400);
+  const cam = { az:-0.55, el:0.72, dist:40 };
+  function placeCam(){ const c = Math.cos(cam.el); camera.position.set(cam.dist*c*Math.sin(cam.az), cam.dist*Math.sin(cam.el), cam.dist*c*Math.cos(cam.az)); camera.lookAt(0,0,0); }
+
+  const mapP = (x,y,z) => { if(!S.warp) return [x,y,z]; const r = Math.hypot(x,y,z); const f = Math.max(0.15, 1 + WARPK*Phi(r)); return [x*f,y*f,z*f]; };
+
+  // lattice nodes
+  const nodes = [];
+  for(let x=-L;x<=L;x+=2) for(let y=-4;y<=4;y+=2) for(let z=-L;z<=L;z+=2) nodes.push([x,y,z]);
+  const idx = (i,j,k) => (i*5 + j)*15 + k;
+  const segs = [];
+  for(let i=0;i<15;i++) for(let j=0;j<5;j++) for(let k=0;k<15;k++){
+    if(i<14) segs.push([idx(i,j,k),idx(i+1,j,k)]);
+    if(j<4) segs.push([idx(i,j,k),idx(i,j+1,k)]);
+    if(k<14) segs.push([idx(i,j,k),idx(i,j,k+1)]);
+  }
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs.length*6),3));
+  lineGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(segs.length*6),3));
+  const lattice = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({vertexColors:true, transparent:true, opacity:.55}));
+  scene.add(lattice);
+  const ptGeo = new THREE.BufferGeometry();
+  ptGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nodes.length*3),3));
+  ptGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nodes.length*3),3));
+  const points = new THREE.Points(ptGeo, new THREE.PointsMaterial({size:.32, vertexColors:true}));
+  scene.add(points);
+
+  const rampStops = [[0x3d,0x50,0x68],[0x7a,0x6a,0x8e],[0xd9,0x8a,0x4e],[0xff,0xcf,0x5a]];
+  function ramp(u){ u = Math.min(1,Math.max(0,u))*3; const i = Math.min(2,Math.floor(u)), f = u-i, a = rampStops[i], b = rampStops[i+1]; return [0,1,2].map(c=>(a[c]+(b[c]-a[c])*f)/255); }
+  let nodeRate = [], nodeCol = [];
+  function rebuildLattice(){
+    const rMin = Math.sqrt(1+2*Phi(0));
+    nodeRate = nodes.map(n => Math.sqrt(1+2*Phi(Math.hypot(...n))));
+    nodeCol = nodeRate.map(r => ramp(Math.pow((1-r)/(1-rMin),0.55)));
+    const mp = nodes.map(n => mapP(...n));
+    const lp = lineGeo.attributes.position.array, lc = lineGeo.attributes.color.array;
+    segs.forEach((s,q)=>{ for(let e=0;e<2;e++){ const n = s[e]; lp.set(mp[n], q*6+e*3); lc.set(nodeCol[n], q*6+e*3); } });
+    lineGeo.attributes.position.needsUpdate = lineGeo.attributes.color.needsUpdate = true;
+    const pp = ptGeo.attributes.position.array; mp.forEach((p,n)=>pp.set(p,n*3));
+    ptGeo.attributes.position.needsUpdate = true;
+    mass.scale.setScalar(S.warp ? Math.max(0.15,1+WARPK*Phi(R)) : 1);
+    rebuildRefs();
+  }
+  function updateTicks(){
+    const pc = ptGeo.attributes.color.array, P = 2.0;
+    nodes.forEach((n,i)=>{
+      let k = .55;
+      if(S.ticks){ const ph = (tAnim*nodeRate[i]/P) % 1; k = ph < .14 ? 1.25 : .35 + .25*Math.cos(ph*2*Math.PI); }
+      const c = nodeCol[i]; pc[i*3]=Math.min(1,c[0]*k+.02); pc[i*3+1]=Math.min(1,c[1]*k+.02); pc[i*3+2]=Math.min(1,c[2]*k+.02);
+    });
+    ptGeo.attributes.color.needsUpdate = true;
+  }
+
+  const mass = new THREE.Mesh(new THREE.SphereGeometry(R,40,24), new THREE.MeshBasicMaterial({color:0x3a4654}));
+  scene.add(mass);
+  const massRim = new THREE.Mesh(new THREE.SphereGeometry(R*1.02,40,24), new THREE.MeshBasicMaterial({color:0x8aa0b6, wireframe:true, transparent:true, opacity:.18}));
+  mass.add(massRim);
+
+  const COLORS = { light:0xffcf5a, fast:0x5cc6ee, slow:0xee8fb6 };
+  const MAXP = 6000;
+  const trails = {}, markers = {}, hands = {};
+  for(const k of ['light','fast','slow']){
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXP*3),3)); g.setDrawRange(0,0);
+    trails[k] = new THREE.Line(g, new THREE.LineBasicMaterial({color:COLORS[k]})); scene.add(trails[k]);
+    markers[k] = new THREE.Mesh(new THREE.SphereGeometry(k==='light'?.22:.32,20,12), new THREE.MeshBasicMaterial({color:COLORS[k]})); scene.add(markers[k]);
+    const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6),3));
+    hands[k] = new THREE.Line(hg, new THREE.LineBasicMaterial({color:0xffffff})); scene.add(hands[k]);
+  }
+  const refs = [];
+  function rebuildRefs(){
+    refs.forEach(r=>{scene.remove(r); r.geometry.dispose();}); refs.length = 0;
+    if(!S.flat) return;
+    for(const z0 of [S.b, -S.b2]){
+      const pts = []; for(let x=-L;x<=L+.001;x+=.25) pts.push(new THREE.Vector3(...mapP(x,0,z0)));
+      const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({color:0x5b6b7c, dashSize:.4, gapSize:.3}));
+      l.computeLineDistances(); scene.add(l); refs.push(l);
+    }
+  }
+  function drawBodies(){
+    for(const B of bodies){
+      const g = trails[B.kind].geometry, a = g.attributes.position.array, n = Math.min(MAXP, B.trail.length);
+      for(let i=0;i<n;i++) a.set(mapP(B.trail[i][0],0,B.trail[i][1]), i*3);
+      g.attributes.position.needsUpdate = true; g.setDrawRange(0,n);
+      const p = mapP(B.x,0,B.z); markers[B.kind].position.set(...p);
+      const ang = 2*Math.PI*B.tau/4, hl = .75;
+      const ha = hands[B.kind].geometry.attributes.position.array;
+      ha.set([p[0],p[1]+.02,p[2], p[0]+hl*Math.sin(ang),p[1]+.02,p[2]-hl*Math.cos(ang)]);
+      hands[B.kind].geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  // ---------- readouts ----------
+  const deg = a => (a*180/Math.PI).toFixed(2)+'°';
+  function measuredAlpha(B){ const a = Math.atan2(B.vz,B.vx); return B.z0sign > 0 ? -a : a; }
+  function readouts(){
+    $('tc').textContent = t.toFixed(2);
+    const [Lb,Fb,Sb] = bodies;
+    Lb.z0sign = 1; Fb.z0sign = 1; Sb.z0sign = -1;
+    const th = (m,b,v) => 2*m/(b*v*v)*(1+v*v);
+    $('aL').textContent = deg(measuredAlpha(Lb));
+    $('aLt').textContent = deg(4*S.m/S.b);
+    if(Lb.done && !Lb.hit){
+      $('shL').textContent = '+'+(Lb.t - 2*L).toFixed(3);
+      const d = Math.hypot(L,S.b); $('shLt').textContent = '+'+(2*S.m*Math.log((d+L)/(d-L))).toFixed(3);
+    } else { $('shL').textContent = 'in flight'; $('shLt').textContent = '–'; }
+    for(const [B,id] of [[Fb,'F'],[Sb,'S']]){
+      $('t'+id).textContent = B.tau.toFixed(3) + (B.hit ? ' (hit mass)' : '');
+      $('r'+id).textContent = B.t>0 ? (B.tau/B.t).toFixed(4) : '–';
+      $('sr'+id).textContent = Math.sqrt(1-B.v0*B.v0).toFixed(4);
+      $('a'+id).textContent = B.hit ? 'captured' : deg(measuredAlpha(B));
+      $('a'+id+'t').textContent = deg(th(S.m, B.b, B.v0));
+    }
+    const rot = (id,tau)=>$(id).setAttribute('transform','rotate('+((tau/4*360)%360).toFixed(1)+')');
+    rot('hL',0); rot('hF',Fb.tau); rot('hS',Sb.tau);
+  }
+
+  // ---------- controls ----------
+  function syncLabels(){
+    $('mV').textContent = S.m.toFixed(2); $('bV').textContent = S.b.toFixed(1);
+    $('vfV').textContent = S.vf.toFixed(3); $('b2V').textContent = S.b2.toFixed(1);
+    $('vsV').textContent = S.vs.toFixed(2); $('spdV').textContent = S.spd+'×';
+  }
+  function readInputs(){
+    S.m = +$('m').value; S.b = +$('b').value; S.vf = vFromSlider(+$('vf').value);
+    S.b2 = +$('b2').value; S.vs = +$('vs').value; S.spd = +$('spd').value;
+    S.warp = $('warp').checked; S.ticks = $('ticks').checked; S.flat = $('flat').checked;
+    syncLabels();
+  }
+  ['m','b','vf','b2','vs'].forEach(id=>$(id).addEventListener('input',()=>{ readInputs(); rebuildLattice(); launch(); }));
+  $('spd').addEventListener('input', readInputs);
+  ['warp','flat'].forEach(id=>$(id).addEventListener('change',()=>{ readInputs(); rebuildLattice(); }));
+  $('ticks').addEventListener('change', readInputs);
+  $('launch').addEventListener('click', launch);
+  $('play').addEventListener('click',()=>{ S.playing = !S.playing; $('play').textContent = S.playing ? 'Pause' : 'Play'; });
+  $('vTop').addEventListener('click',()=>{ cam.az = 0; cam.el = 1.45; cam.dist = 38; });
+  $('vSide').addEventListener('click',()=>{ cam.az = -0.55; cam.el = 0.72; cam.dist = 40; });
+  const presets = {
+    null:   { m:.08, b:3, vf:1, b2:6, vs:.35 },
+    newton: { m:.05, b:4, vf:.2, b2:7, vs:.2 },
+    default:{ m:.08, b:3, vf:.45, b2:6, vs:.35 }
+  };
+  document.querySelectorAll('[data-p]').forEach(btn=>btn.addEventListener('click',()=>{
+    const p = presets[btn.dataset.p]; for(const k in p) $(k).value = p[k];
+    readInputs(); rebuildLattice(); launch();
+  }));
+
+  // orbit / pinch
+  const ptrs = new Map(); let pinch0 = 0, dist0 = 0;
+  canvas.addEventListener('pointerdown', e=>{ canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+    if(ptrs.size===2){ const [a,b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0]-b[0],a[1]-b[1]); dist0 = cam.dist; } canvas.style.cursor='grabbing'; });
+  canvas.addEventListener('pointermove', e=>{
+    if(!ptrs.has(e.pointerId)) return; const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+    if(ptrs.size===1){ cam.az -= (e.clientX-prev[0])*0.006; cam.el = Math.min(1.5,Math.max(-1.2, cam.el + (e.clientY-prev[1])*0.006)); }
+    else if(ptrs.size===2){ const [a,b] = [...ptrs.values()]; const d = Math.hypot(a[0]-b[0],a[1]-b[1]); if(pinch0>0) cam.dist = Math.min(90,Math.max(12, dist0*pinch0/d)); }
+  });
+  const up = e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch0 = 0; canvas.style.cursor='grab'; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('wheel', e=>{ e.preventDefault(); cam.dist = Math.min(90,Math.max(12, cam.dist*Math.exp(e.deltaY*0.001))); }, {passive:false});
+
+  function resize(){ const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w,h,false); camera.aspect = w/h; camera.updateProjectionMatrix(); }
+  window.addEventListener('resize', resize);
+
+  // ---------- loop ----------
+  readInputs(); rebuildLattice(); launch(); resize();
+  let last = performance.now();
+  function frame(now){
+    const dtWall = Math.min(0.05,(now-last)/1000); last = now;
+    if(S.playing){
+      const adv = dtWall * 3.2 * S.spd, n = Math.max(1, Math.round(adv/DT));
+      for(let i=0;i<n;i++){ bodies.forEach(step); if(!bodies.every(B=>B.done)) t += DT; }
+      tAnim += reduce ? adv*0.3 : adv;
+    }
+    updateTicks(); drawBodies(); readouts(); placeCam();
+    renderer.render(scene,camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
