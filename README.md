@@ -1,5 +1,11 @@
 # Geodesic Clocks
 
+**[▶ Open the interactive page](https://ninjas1337.github.io/geodesic-clocks/)**
+
+[![Geodesic Clocks: light ray, fast clock and slow clock crossing a lattice of static clocks around a mass](docs/preview.png)](https://ninjas1337.github.io/geodesic-clocks/)
+
+*Static render from the same weak-field model (GM/c² = 0.08). Lattice colour shows the local clock rate √(1+2Φ). The fast clock (0.80c) bends more than light at the same impact parameter, and the slow clock (0.35c) bends most of all.*
+
 An interactive 3D visualization of **time curvature** in the weak-field limit of general relativity.
 
 A light ray and two clocks cross the gravitational field of a mass. The field is shown as a 3D lattice where every node is a static clock ticking at √(1 + 2Φ/c²).
@@ -69,4 +75,4 @@ Sanjin Redzic ([ORCID 0009-0006-7034-6869](https://orcid.org/0009-0006-7034-6869
 
 ## License
 
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Reuse and adapt freely with attribution to Sanjin Redzic.
+[MIT](LICENSE). Copyright (c) 2026 Sanjin Redzic.
