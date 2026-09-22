@@ -1,8 +1,8 @@
 # Geodesic Clocks
 
-**[▶ Open the interactive page](https://ninjas1337.github.io/geodesic-clocks/)**
+**[▶ Open the interactive page](https://ninjas1337.github.io/Geodesic-Clocks/)**
 
-[![Geodesic Clocks: light ray, fast clock and slow clock crossing a lattice of static clocks around a mass](docs/preview.png)](https://ninjas1337.github.io/geodesic-clocks/)
+[![Geodesic Clocks: light ray, fast clock and slow clock crossing a lattice of static clocks around a mass](preview.png)](https://ninjas1337.github.io/Geodesic-Clocks/)
 
 *Static render from the same weak-field model (GM/c² = 0.08). Lattice colour shows the local clock rate √(1+2Φ). The fast clock (0.80c) bends more than light at the same impact parameter, and the slow clock (0.35c) bends most of all.*
 
